@@ -1,6 +1,6 @@
 CFLAGS=-std=c11 -g -static
 
-cc: compiler.c
+compiler: compiler.c
 
 test: compiler
 		./test.sh
