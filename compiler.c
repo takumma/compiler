@@ -18,15 +18,8 @@ struct Token {
     Token *next;
     int val;
     char *str;
+    int len;
 };
-
-typedef enum {
-   ND_ADD,
-   ND_SUB,
-   ND_MUL,
-   ND_DIV,
-   ND_NUM,
-} NodeKind;
 
 Token *token;
 
@@ -53,16 +46,16 @@ void error_at(char *loc, char *fmt, ...) {
     exit(1);
 }
 
-bool consume(char op) {
-    if (token->kind != TK_RESERVED || token->str[0] != op)
+bool consume(char *op) {
+    if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
         return false;
     token = token->next;
     return true;
 }
 
-void expect(char op) {
-    if (token->kind != TK_RESERVED || token->str[0] != op)
-        error_at(token->str, "'%C'ではありません", op);
+void expect(char *op) {
+    if (token->kind != TK_RESERVED || strlen(op) != token->len || memcmp(token->str, op, token->len))
+        error_at(token->str, "'%s'ではありません", op);
     token = token->next;
 }
 
@@ -78,12 +71,17 @@ bool at_eof() {
     return token->kind == TK_EOF;
 }
 
-Token *new_token(TokenKind kind, Token *cur, char *str) {
+Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
     Token *tok = calloc(1, sizeof(Token));
     tok->kind = kind;
     tok->str = str;
+    tok->len = len;
     cur->next = tok;
     return tok;
+}
+
+bool startswith(char *p, char *q) {
+    return memcmp(p, q, strlen(q)) == 0;
 }
 
 Token *tokenize(char *p) {
@@ -97,23 +95,43 @@ Token *tokenize(char *p) {
             continue;
         }
 
-        if (strchr("+-*/()", *p)) {
-            cur = new_token(TK_RESERVED, cur, p++);
+        if (startswith(p, "==") || startswith(p, "!=") || startswith(p, "<=") || startswith(p, ">=")) {
+            cur = new_token(TK_RESERVED, cur, p, 2);
+            p += 2;
+            continue;
+        }
+
+        if (strchr("+-*/()<>", *p)) {
+            cur = new_token(TK_RESERVED, cur, p++, 1);
             continue;
         }
 
         if (isdigit(*p)) {
-            cur = new_token(TK_NUM, cur, p);
+            cur = new_token(TK_NUM, cur, p, 0);
+            char *q = p;
             cur->val = strtol(p, &p, 10);
+            cur->len = p - q;
             continue;
         }
 
         error_at(token->str, "トークナイズできません");
     }
 
-    new_token(TK_EOF, cur, p);
+    new_token(TK_EOF, cur, p, 0);
     return head.next;
 }
+
+typedef enum {
+   ND_EQ,
+   ND_NE,
+   ND_LT,
+   ND_LE,
+   ND_ADD,
+   ND_SUB,
+   ND_MUL,
+   ND_DIV,
+   ND_NUM,
+} NodeKind;
 
 typedef struct Node Node;
 
@@ -140,17 +158,55 @@ Node *new_node_num(int val) {
 }
 
 Node *expr();
+Node *equality();
+Node *relational();
+Node *add();
 Node *mul();
 Node *unary();
 Node *primary();
 
 Node *expr() {
+    Node *node = equality();
+    return node;
+}
+
+Node *equality() {
+    Node *node = relational();
+
+    for (;;) {
+        if (consume("=="))
+            node = new_node(ND_EQ, node, relational());
+        else if (consume("!="))
+            node = new_node(ND_NE, node, relational());
+        else
+            return node;
+    }
+}
+
+Node *relational() {
+    Node *node = add();
+
+    for (;;) {
+        if (consume("<"))
+            node = new_node(ND_LT, node, add());
+        else if (consume("<="))
+            node = new_node(ND_LE, node, add());
+        else if (consume(">"))
+            node = new_node(ND_LT, add(), node);
+        else if (consume(">="))
+            node = new_node(ND_LE, add(), node);
+        else
+            return node;
+    }
+}
+
+Node *add() {
     Node *node = mul();
 
     for (;;) {
-        if (consume('+'))
+        if (consume("+"))
             node = new_node(ND_ADD, node, mul());
-        else if (consume('-'))
+        else if (consume("-"))
             node = new_node(ND_SUB, node, mul());
         else
             return node;
@@ -161,9 +217,9 @@ Node *mul() {
     Node *node = unary();
 
     for (;;) {
-        if (consume('*'))
+        if (consume("*"))
             node = new_node(ND_MUL, node, unary());
-        else if (consume('/'))
+        else if (consume("/"))
             node = new_node(ND_DIV, node, unary());
         else
             return node;
@@ -171,17 +227,17 @@ Node *mul() {
 }
 
 Node *unary() {
-    if (consume('+'))
+    if (consume("+"))
         return unary();
-    if (consume('-'))
+    if (consume("-"))
         return new_node(ND_SUB, new_node_num(0), unary());
     return primary();
 }
 
 Node *primary() {
-    if (consume('(')) {
+    if (consume("(")) {
         Node *node = expr();
-        expect(')');
+        expect(")");
         return node;
     }
 
@@ -201,6 +257,26 @@ void gen(Node *node) {
     printf("    pop rax\n");
 
     switch (node->kind) {
+        case ND_EQ:
+            printf("    cmp rax, rdi\n");
+            printf("    sete al\n");
+            printf("    movzb rax, al\n");
+            break;
+        case ND_NE:
+            printf("    cmp rax, rdi\n");
+            printf("    setne al\n");
+            printf("    movzb rax, al\n");
+            break;
+        case ND_LT:
+            printf("    cmp rax, rdi\n");
+            printf("    setl al\n");
+            printf("    movzb rax, al\n");
+            break;
+        case ND_LE:
+            printf("    cmp rax, rdi\n");
+            printf("    setle al\n");
+            printf("    movzb rax, al\n");
+            break;
         case ND_ADD:
             printf("    add rax, rdi\n");
             break;
