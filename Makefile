@@ -1,6 +1,11 @@
 CFLAGS=-std=c11 -g -static
+SRCS=$(wildcard *.c)
+OBJS=$(SRCS:.c=.o)
 
-compiler: compiler.c
+compiler: $(OBJS)
+			$(CC) -o compiler $(OBJS) $(LDFLAGS)
+
+$(OBJS): compiler.h
 
 test: compiler
 		./test.sh
