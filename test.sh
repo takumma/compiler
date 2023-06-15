@@ -49,5 +49,6 @@ assert 0 '1>=2'
 assert 4 'a=4;'
 assert 5 'b=2+3;'
 assert 8 'a=7; b=3*5; z=b-a;'
+assert 14 'foo=7;bar=2*foo;'
 
 echo OK

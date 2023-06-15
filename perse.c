@@ -1,4 +1,8 @@
 #include "compiler.h"
+#include <stdlib.h>
+#include <string.h>
+
+LVar *locals;
 
 void error(char *fmt, ...) {
   va_list ap;
@@ -42,12 +46,31 @@ int expect_number() {
     return val;
 }
 
+LVar *find_lvar(Token *tok) {
+    for (LVar *var = locals; var; var = var->next)
+        if (var->len == tok->len && !memcmp(tok->str, var->name, var->len))
+            return var;
+    return NULL;
+}
+
 bool at_eof() {
     return token->kind == TK_EOF;
 }
 
 int get_offset() {
-    int offset = (token->str[0] - 'a' + 1) * 8;
+    LVar *lvar = find_lvar(token);
+    int offset;
+    if (lvar) {
+        offset = lvar->offset;
+    } else {
+        lvar = calloc(1, sizeof(LVar));
+        lvar->next = locals;
+        lvar->name = token->str;
+        lvar->len = token->len;
+        offset = locals->offset + 8;
+        lvar->offset = offset;
+        locals = lvar;
+    }
     token = token->next;
     return offset;
 }
@@ -88,7 +111,12 @@ Token *tokenize(char *p) {
         }
 
         if ('a' <= *p && *p <= 'z') {
-            cur = new_token(TK_IDENT, cur, p++, 1);
+            int len = 1;
+            while ('a' <= *(p + len) && *(p + len) <= 'z')
+                len++;
+
+            cur = new_token(TK_IDENT, cur, p, len);
+            p += cur->len;
             continue;
         }
 
@@ -125,6 +153,7 @@ Node *new_node_num(int val) {
 Node *new_node_ident(int offset) {
     Node *node = calloc(1, sizeof(Node));
     node->kind = ND_LVAR;
+
     node->offset = offset;
     return node;;
 }
@@ -133,6 +162,8 @@ Node *code[100];
 
 void *program() {
     int i = 0;
+    locals = calloc(1, sizeof(LVar));
+    locals->offset = 0;
 
     while (!at_eof())
         code[i++] = stmt();
