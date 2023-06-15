@@ -46,6 +46,12 @@ bool at_eof() {
     return token->kind == TK_EOF;
 }
 
+int get_offset() {
+    int offset = (token->str[0] - 'a' + 1) * 8;
+    token = token->next;
+    return offset;
+}
+
 Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
     Token *tok = calloc(1, sizeof(Token));
     tok->kind = kind;
@@ -76,8 +82,13 @@ Token *tokenize(char *p) {
             continue;
         }
 
-        if (strchr("+-*/()<>", *p)) {
+        if (strchr("+-*/()<>=;", *p)) {
             cur = new_token(TK_RESERVED, cur, p++, 1);
+            continue;
+        }
+
+        if ('a' <= *p && *p <= 'z') {
+            cur = new_token(TK_IDENT, cur, p++, 1);
             continue;
         }
 
@@ -111,8 +122,41 @@ Node *new_node_num(int val) {
     return node;
 }
 
+Node *new_node_ident(int offset) {
+    Node *node = calloc(1, sizeof(Node));
+    node->kind = ND_LVAR;
+    node->offset = offset;
+    return node;;
+}
+
+Node *code[100];
+
+void *program() {
+    int i = 0;
+
+    while (!at_eof())
+        code[i++] = stmt();
+
+    code[i] = NULL;
+}
+
+Node *stmt() {
+    Node *node = expr();
+    consume(";");
+    return node;
+}
+
 Node *expr() {
+    Node *node = assign();
+    return node;
+}
+
+Node *assign() {
     Node *node = equality();
+    
+    if (consume("=")) {
+        node = new_node(ND_ASSIGN, node, assign());
+    }
     return node;
 }
 
@@ -185,6 +229,10 @@ Node *primary() {
         Node *node = expr();
         expect(")");
         return node;
+    }
+    
+    if (token->kind == TK_IDENT) {
+        return new_node_ident(get_offset());
     }
 
     return new_node_num(expect_number());
