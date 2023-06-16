@@ -1,4 +1,5 @@
 #include "compiler.h"
+#include <stdio.h>
 
 void gen_lval(Node *node) {
     if (node->kind != ND_LVAR)
@@ -28,6 +29,13 @@ void gen(Node *node) {
             printf("    pop rax\n");
             printf("    mov [rax], rdi\n");
             printf("    push rdi\n");
+            return;
+        case ND_RETURN:
+            gen(node->lhs);
+            printf("    pop rax\n");
+            printf("    mov rsp, rbp\n");
+            printf("    pop rbp\n");
+            printf("    ret\n");
             return;
     }
 
