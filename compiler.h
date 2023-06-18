@@ -60,6 +60,10 @@ typedef enum {
    ND_LVAR,
    ND_ASSIGN,
    ND_RETURN,
+   ND_IF,
+   ND_ELSE,
+   ND_WHILE,
+   ND_FOR,
 } NodeKind;
 
 typedef struct Node Node;

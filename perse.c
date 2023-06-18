@@ -38,6 +38,10 @@ void expect(char *op) {
     token = token->next;
 }
 
+bool equal(Token *tok, char *op) {
+    return memcmp(tok->str, op, tok->len) == 0 && op[tok->len] == '\0';
+}
+
 int expect_number() {
     if (token->kind != TK_NUM)
         error_at(token->str, "数ではありません");
@@ -86,6 +90,25 @@ int get_offset() {
     return offset;
 }
 
+char *reserved_words[] = {
+    "==",
+    "!=",
+    "<=",
+    ">=",
+    "if",
+    "else",
+    "while",
+    "for",
+};
+
+int get_reserved_len(char *p) {
+    for (int i = 0; i < 8; i++) {
+        if (strncmp(p, reserved_words[i], strlen(reserved_words[i])))
+                return strlen(reserved_words[i]);
+    }
+    return 0;
+}
+
 Token *new_token(TokenKind kind, Token *cur, char *str, int len) {
     Token *tok = calloc(1, sizeof(Token));
     tok->kind = kind;
@@ -107,6 +130,30 @@ Token *tokenize(char *p) {
     while (*p) {
         if (isspace(*p)) {
             p++;
+            continue;
+        }
+
+        if (startswith(p, "if")) {
+            cur = new_token(TK_RESERVED, cur, p, 2);
+            p += 2;
+            continue;
+        }
+
+        if (startswith(p, "while")) {
+            cur = new_token(TK_RESERVED, cur, p, 5);
+            p += 2;
+            continue;
+        }
+
+        if (startswith(p, "for")) {
+            cur = new_token(TK_RESERVED, cur, p, 3);
+            p += 3;
+            continue;
+        }
+
+        if (startswith(p, "else")) {
+            cur = new_token(TK_RESERVED, cur, p, 4);
+            p += 4;
             continue;
         }
 
@@ -191,7 +238,44 @@ void *program() {
 Node *stmt() {
     Node *node;
     
-    if(at_return()) {
+    if (consume("if")) {
+        expect("(");
+        Node *condition_node = expr();
+        expect(")");
+        node = stmt();
+        if(consume("else"))
+            node = new_node(ND_ELSE, node, stmt());
+        
+        node = new_node(ND_IF, condition_node, node);
+        return node;
+    } else if (consume("while")) {
+        expect("(");
+        node = expr();
+        expect(")");
+        node = new_node(ND_WHILE, node, stmt());
+        return node;
+    } else if (consume("for")) {
+        Node *initial_node, *
+        expect("(");
+        if (!equal(token, ";"))
+            node = new_node(ND_FOR, node, expr());
+        if (!consume(";"))
+            error_at(token->str, "';'ではないトークンです");
+
+        if (!equal(token, ";"))
+            node = new_node(ND_FOR, node, expr());
+
+        if (!consume(";"))
+            error_at(token->str, "';'ではないトークンです");
+
+        if (!equal(token, ")"))
+            node = new_node(ND_FOR, node, expr());
+
+        if (!consume(")"))
+            error_at(token->str, "')'ではないトークンです");
+
+        
+    } else if (at_return()) {
         node = calloc(1, sizeof(Node));
         node->kind = ND_RETURN;
         token = token->next;
