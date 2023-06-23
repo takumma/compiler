@@ -255,26 +255,24 @@ Node *stmt() {
         node = new_node(ND_WHILE, node, stmt());
         return node;
     } else if (consume("for")) {
-        Node *initial_node, *
         expect("(");
-        if (!equal(token, ";"))
-            node = new_node(ND_FOR, node, expr());
+        Node *initial_node = new_node(ND_FOR, node, expr());
         if (!consume(";"))
             error_at(token->str, "';'ではないトークンです");
 
-        if (!equal(token, ";"))
-            node = new_node(ND_FOR, node, expr());
-
+        Node *condition_node = new_node(ND_FOR, node, expr());
         if (!consume(";"))
             error_at(token->str, "';'ではないトークンです");
 
-        if (!equal(token, ")"))
-            node = new_node(ND_FOR, node, expr());
-
+        Node *final_node = new_node(ND_FOR, node, expr());
         if (!consume(")"))
             error_at(token->str, "')'ではないトークンです");
 
-        
+        node = new_node(ND_FOR, stmt(), final_node);
+        node = new_node(ND_FOR, condition_node, node);
+        node = new_node(ND_FOR, initial_node, node);
+
+        return node;
     } else if (at_return()) {
         node = calloc(1, sizeof(Node));
         node->kind = ND_RETURN;
